@@ -286,14 +286,24 @@ async function loadSettings() {
 async function saveSettings(data) {
   await setDoc(doc(db, 'settings', 'main'), data);
 }
+async function getOrderSnap(key) {
+  const snap = await getDoc(doc(db, 'orders', key));
+  return snap.exists() ? snap.data() : null;
+}
+async function saveOrderByKey(key, list) {
+  await setDoc(doc(db, 'orders', key), { list });
+}
+
 async function startup() {
   await initUsersToFirebase();
   await loadUsers();
   await loadMenu();
   const settings = await loadSettings();
   window.openDays = settings.days || 1;
+  window.cutTime = settings.cutTime || '08:30';
 }
 startup();
+window.setCutTime = setCutTime;
 window.go = go;
 window.doLogin = doLogin;
 window.doLogout = doLogout;
@@ -324,6 +334,9 @@ window.loadSettings = loadSettings;
 window.saveSettings = saveSettings;
 window.setOpenDays = setOpenDays;
 window.switchOrderDay = switchOrderDay;
+window.getOrderSnap = getOrderSnap;
+window.saveOrderByKey = saveOrderByKey;
+window.cancelOrder = cancelOrder;
 </script>
 <!-- 訂單 -->
  <div class="pg" id="pgOrders">
@@ -384,13 +397,16 @@ window.switchOrderDay = switchOrderDay;
       <button class="btn hide" id="btnMenu" onclick="go('pgMenu')">菜單</button>
       <button class="btn hide" id="btnAdmin" onclick="go('pgAdmin')">管理</button>
       <button class="btn hide" id="btnOrders" onclick="go('pgOrders')">訂單</button>
+      <button class="btn" onclick="go('pgMyOrders')">訂單紀錄</button>
       <button class="btn" onclick="doLogout()">登出</button>
     </div>
   </div>
   <div class="money" id="moneyEl"></div>
   <div class="date" id="dateEl"></div>
   <div id="cutEl"></div>
-  <div class="dtabs" id="dayOrderTabs"></div>
+  <div class="dtabs" id="dayOrderTabs">
+</div>
+<button class="btn" style="margin-bottom:10px;width:100%;" onclick="selectAll()">全選</button>
 <div class="tabs">
   <div class="tab on" onclick="switchTab('bento')">便當</div>
   <div class="tab" onclick="switchTab('western')">西式</div>
@@ -402,6 +418,10 @@ window.switchOrderDay = switchOrderDay;
     <div class="ftotal"><span>合計</span><span id="ttl">$0</span></div>
     <button class="btn-send" id="btnSend" disabled onclick="submitOrder()">送出訂單</button>
   </div>
+</div>
+<div class="pg" id="pgMyOrders">
+  <div class="bar"><h1>我的訂單</h1><button class="btn" onclick="go('pgOrder')">← 返回</button></div>
+  <div id="myOrderList"></div>
 </div>
 
 <!-- 儲值管理 -->
@@ -429,7 +449,11 @@ window.switchOrderDay = switchOrderDay;
     <option value="5">5 天</option>
   </select>
 </div>
-  <div class="dtabs" id="dtabs"></div>
+<div class="amtrow" style="margin-bottom:16px;">
+  <span style="font-size:13px;color:#888;">點餐截止時間</span>
+  <input type="time" id="cutTimeSel" value="08:30" onchange="setCutTime(this.value)" style="border:1px solid #ddd;border-radius:8px;padding:4px 8px;font-size:13px;">
+</div>
+<div class="dtabs" id="dtabs"></div>
   <div id="mcontent"></div>
   <div class="addbox">
     <div class="addtitle">新增餐點</div>
@@ -507,6 +531,81 @@ const USERS = {
   "1": { pin:"1111", balance:1000000, isAdmin:false, log:[] },
   "admin": { pin:"0000", balance:0, isAdmin:true,  log:[] },
 };
+async function cancelOrder(key, idx, total) {
+  const data = await window.getOrderSnap(key);
+  if (!data) return;
+  data.list.splice(idx, 1);
+  await window.saveOrderByKey(key, data.list);
+  USERS[me].balance += total;
+  USERS[me].log.push({ desc:'取消訂單', amt:total, time:ts() });
+  await window.saveUser(me);
+  drawBalance();
+  toast('訂單已取消，退款 $' + total);
+  drawMyOrders();
+}
+async function drawMyOrders() {
+  const days = window.openDays || 1;
+  let allOrders = [];
+  for (let i = 0; i < days; i++) {
+    const d = new Date();
+    d.setDate(d.getDate() + i);
+    const key = `${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    const snap = await window.getOrderSnap(key);
+    if (snap) {
+      const list = snap.list || [];
+      list.forEach((order, idx) => {
+        if (order.user === me) allOrders.push({ ...order, key, idx });
+      });
+    }
+  }
+  const el = document.getElementById('myOrderList');
+  if (!allOrders.length) { 
+  const logHtml = USERS[me].log.length ? [...USERS[me].log].reverse().map(l => `
+    <div class="logrow">
+      <div><div class="logtext">${l.desc}</div><div class="logtime">${l.time}</div></div>
+      <span class="logamt ${l.amt>0?'up':'dn'}">${l.amt>0?'+':''}$${Math.abs(l.amt)}</span>
+    </div>`).join('') : '<div class="lognil">尚無記錄</div>';
+  el.innerHTML = '<div class="nil">今日尚無訂單</div>' + 
+    `<div class="slbl" style="margin:16px 0 8px;">出入帳記錄</div>` + logHtml;
+  return; 
+}
+  const logHtml = USERS[me].log.length ? [...USERS[me].log].reverse().map(l => `
+    <div class="logrow">
+      <div><div class="logtext">${l.desc}</div><div class="logtime">${l.time}</div></div>
+      <span class="logamt ${l.amt>0?'up':'dn'}">${l.amt>0?'+':''}$${Math.abs(l.amt)}</span>
+    </div>`).join('') : '<div class="lognil">尚無記錄</div>';
+
+  el.innerHTML = allOrders.map((order, i) => `
+    <div class="ucard">
+      <div class="uhead">
+        <span class="uname">${order.detail.join('、')}</span>
+        <span class="ubal">$${order.total}</span>
+      </div>
+      <div style="padding:.5rem 1.1rem;">
+        <span style="font-size:12px;color:#888;">${order.time}</span>
+        ${!closed() ? `<button class="btn-del" style="float:right;" onclick="cancelOrder('${order.key}',${order.idx},${order.total})">取消</button>` : ''}
+      </div>
+    </div>`).join('') + 
+    `<div class="slbl" style="margin:16px 0 8px;">出入帳記錄</div>` + logHtml;
+}
+function selectAll() {
+  const t = today();
+  [...t.bento, ...t.western].forEach(m => {
+    if (!pick[m.id]) pick[m.id] = [];
+    if (pick[m.id].length === 0) {
+      pick[m.id].push({ set:false, drink:DRINK[0].name });
+    }
+    document.getElementById(`q-${m.id}`).textContent = pick[m.id].length;
+    if (m.isWestern) renderItems(m.id);
+    calcSub(m.id);
+  });
+  calcTotal();
+}
+async function setCutTime(val) {
+  window.cutTime = val;
+  await window.saveSettings({ days: window.openDays || 1, cutTime: val });
+  toast(`截止時間已設定為 ${val}`);
+}
 
 let orderDay = 0;
 function drawDayOrderTabs() {
@@ -539,9 +638,11 @@ function ts() {
   return `${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
 }
 function closed() {
-  // return false;
   const n = new Date();
-  return n.getHours()*60 + n.getMinutes() >= 8*60+30;
+  const now = n.getHours() * 60 + n.getMinutes();
+  const cut = window.cutTime || '08:30';
+  const [h, m] = cut.split(':').map(Number);
+  return now >= h * 60 + m;
 }
 function toast(msg) {
   const t = document.getElementById('toast');
@@ -551,12 +652,13 @@ function toast(msg) {
 
 function go(id) {
   document.getElementById('pgLogin').style.display = id==='pgLogin' ? 'flex' : 'none';
-  ['pgOrder','pgAdmin','pgMenu','pgDonate','pgOrders'].forEach(p => {
+  ['pgOrder','pgAdmin','pgMenu','pgDonate','pgOrders','pgMyOrders'].forEach(p => {
     document.getElementById(p).style.display = id===p ? 'block' : 'none';
   });
   if (id==='pgAdmin') drawUsers();
   if (id==='pgMenu')  drawMenuPage();
   if (id==='pgOrders') drawOrders();
+  if (id==='pgMyOrders') drawMyOrders();
 }
 async function setOpenDays(val) {
   window.openDays = parseInt(val);
@@ -608,9 +710,11 @@ function drawCut() {
     sb.disabled = true; sb.textContent = '點餐已截止';
     document.querySelectorAll('.qbtn').forEach(b => b.disabled = true);
   } else {
-    const m = 8*60+30 - (new Date().getHours()*60 + new Date().getMinutes());
+    const cut = window.cutTime || '08:30';
+    const [ch, cm] = cut.split(':').map(Number);
+    const m = ch*60+cm - (new Date().getHours()*60 + new Date().getMinutes());
     const h = Math.floor(m/60), mm = m%60;
-    el.innerHTML = `<div class="cutopen">點餐截止：上午 8:30（還有 ${h>0?h+' 小時 '+mm+' 分鐘':mm+' 分鐘'}）</div>`;
+    el.innerHTML = `<div class="cutopen">點餐截止：上午 ${window.cutTime || '08:30'}（還有 ${h>0?h+' 小時 '+mm+' 分鐘':mm+' 分鐘'}）</div>`;
   }
 }
 function renderItems(id) {
@@ -818,6 +922,7 @@ function drawMenuPage() {
   mon.setDate(n.getDate()-((n.getDay()+6)%7));
   const fri=new Date(mon); fri.setDate(mon.getDate()+4);
   const fmt=d=>`${d.getMonth()+1}/${d.getDate()}`;
+  document.getElementById('cutTimeSel').value = window.cutTime || '08:30';
   document.getElementById('wklbl').textContent = `${fmt(mon)} – ${fmt(fri)}`;
   document.getElementById('dtabs').innerHTML = DAYS.map((d,i) =>
     `<div class="dtab${i===day?' on':''}" onclick="switchDay(${i})">週${d}</div>`
@@ -911,11 +1016,11 @@ async function doDonate() {
   if (pin !== USERS[me].pin) { err.textContent='密碼錯誤'; err.style.display='block'; document.getElementById('dPin').value=''; return; }
   if (USERS[me].balance < donateAmt) { err.textContent='餘額不足'; err.style.display='block'; return; }
   USERS[me].balance -= donateAmt;
-  USERS['admin'].balance += donateAmt;
-  USERS[me].log.push({ desc:`斗內 admin`, amt:-donateAmt, time:ts() });
-  USERS['admin'].log.push({ desc:`收到 ${me} 斗內`, amt:donateAmt, time:ts() });
-  await saveUser(me);
+  USERS['10331'].balance += donateAmt;
+  USERS['10331'].log.push({ desc:`收到 ${me} 斗內`, amt:donateAmt, time:ts() });
+  await window.saveUser('10331');
   await saveUser('admin');
+  await saveUser(me);
   drawBalance();
   toast(`成功斗內 $${donateAmt}！`);
   const coin = document.createElement('div');
