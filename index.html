@@ -706,7 +706,7 @@ function drawCut() {
   const el = document.getElementById('cutEl');
   const sb = document.getElementById('btnSend');
   if (closed()) {
-    el.innerHTML = '<div class="cutclose">今日點餐已截止（08:30）</div>';
+    el.innerHTML = `<div class="cutclose">今日點餐已截止 (${window.cutTime || '08:30'}) </div>`;
     sb.disabled = true; sb.textContent = '點餐已截止';
     document.querySelectorAll('.qbtn').forEach(b => b.disabled = true);
   } else {
