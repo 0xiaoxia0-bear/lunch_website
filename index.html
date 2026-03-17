@@ -130,8 +130,19 @@ input:disabled + .track { opacity: .4; cursor: not-allowed; }
 .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: #1a1a1a; color: white; font-size: 13px; padding: 8px 18px; border-radius: 8px; opacity: 0; transition: opacity .3s; pointer-events: none; white-space: nowrap; z-index: 99; }
 .toast.show { opacity: 1; }
 .hide { display: none !important; }
-
+/* 黑暗模式 */
+body.dark { background: #1a1a1a; color: #e0e0e0; }
+body.dark .box, body.dark .card, body.dark .ucard, body.dark .addbox, body.dark .popup { background: #2a2a2a; border-color: #444; }
+body.dark .btn, body.dark .qbtn, body.dark .dtab, body.dark .tab, body.dark .tbtn { background: #333; border-color: #555; color: #e0e0e0; }
+body.dark .tab.on, body.dark .dtab.on { background: #444; color: white; border-color: #777; }
+body.dark .foot, body.dark .summary { background: #2a2a2a; }
+body.dark .field input, body.dark .inp, body.dark .amtin, body.dark .dsel { background: #333; border-color: #555; color: #e0e0e0; }
+body.dark .money { background: #1a3a2a; color: #5ecfa0; }
+body.dark .bar h1, body.dark .cname, body.dark .uname, body.dark .ftotal, body.dark .logtext { color: #e0e0e0; }
+body.dark .date, body.dark .cprice, body.dark .row label, body.dark .loglbl, body.dark .logtime { color: #999; }
+body.dark .qnum { color: white; }
 .donate {
+
   position: fixed;
   background-color: #f0f0f0;
   color: #555;
@@ -401,7 +412,10 @@ window.cancelOrder = cancelOrder;
       <button class="btn" onclick="doLogout()">登出</button>
     </div>
   </div>
+  <div style="display:flex;align-items:center;">
   <div class="money" id="moneyEl"></div>
+  <button class="btn" id="darkBtn" onclick="toggleDark()" style="margin-left:auto;">🌙</button>
+</div>
   <div class="date" id="dateEl"></div>
   <div id="cutEl"></div>
   <div class="dtabs" id="dayOrderTabs">
@@ -761,7 +775,9 @@ function mcard(m) {
     <div class="row"><label>數量</label>
       <div class="qbox">
         <button class="qbtn" onclick="chgQty('${m.id}',-1)">−</button>
-        <span class="qnum" id="q-${m.id}">0</span>
+        <span class="qnum" id="q-${m.id}">
+          0
+          </span>
         <button class="qbtn" onclick="chgQty('${m.id}',1)">+</button>
       </div>
     </div>${sp}
@@ -1038,6 +1054,19 @@ async function doDonate() {
 function setDonateCustom(val) {
   donateAmt = parseInt(val) || 0;
   document.querySelectorAll('#pgDonate .tbtn').forEach(b => b.classList.remove('on'));
+}
+
+function toggleDark() {
+  document.body.classList.toggle('dark');
+  const isDark = document.body.classList.contains('dark');
+  document.getElementById('darkBtn').textContent = isDark ? '☀️' : '🌙';
+  localStorage.setItem('dark', isDark);
+}
+
+// 記住上次設定
+if (localStorage.getItem('dark') === 'true') {
+  document.body.classList.add('dark');
+  document.getElementById('darkBtn').textContent = '☀️';
 }
 </script>
 </body>
