@@ -14,7 +14,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
 .logo { text-align: center; margin-bottom: 1.75rem; }
 .logo-img { width: 48px; height: 48px; background: #EAF3DE; border-radius: 12px; display: flex; align-items: center; justify-content: center; margin: 0 auto 10px; }
 .logo-img svg { width: 24px; height: 24px; }
-.logo h1.light { font-size: 18px; font-weight: 600; color: #1a1a1a; }
+.logo h1 { font-size: 18px; font-weight: 600; color: #1a1a1a; }
 .logo p { font-size: 13px; color: #888; margin-top: 3px; }
 .field { margin-bottom: 14px; }
 .field label { display: block; font-size: 13px; color: #666; margin-bottom: 6px; }
@@ -142,6 +142,7 @@ body.dark .money { background: #1a3a2a; color: #5ecfa0; }
 body.dark .bar h1, body.dark .cname, body.dark .uname, body.dark .ftotal, body.dark .logtext { color: #e0e0e0; }
 body.dark .date, body.dark .cprice, body.dark .row label, body.dark .loglbl, body.dark .logtime { color: #999; }
 body.dark .qnum { color: white; }
+body.dark .logo h1 { color: #e0e0e0; }
 .logo h1.dark { font-size: 18px; font-weight: 600; color: #e0e0e0; }
 .donate {
 
@@ -192,7 +193,7 @@ body.dark .qnum { color: white; }
 window.saveUser = saveUser;
 window.saveMenu = saveMenu;
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-app.js";
-import { getFirestore, doc, getDoc, setDoc, collection, getDocs } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-firestore.js";
+import { getFirestore, doc, getDoc, setDoc, collection, getDocs, onSnapshot } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-firestore.js";
 
 const fbConfig = {
   apiKey: "AIzaSyA3MfTkuXeovGICNaq_bH-9AVF1w6iYRB0",
@@ -204,9 +205,11 @@ const fbConfig = {
 };
 const app = initializeApp(fbConfig);
 const db  = getFirestore(app);
-async function loadUsers() {
-  const snap = await getDocs(collection(db, 'users'));
-  snap.forEach(d => { USERS[d.id] = d.data(); });
+function listenUsers() {
+  onSnapshot(collection(db, 'users'), snap => {
+    snap.forEach(d => { USERS[d.id] = d.data(); });
+    if (me) drawBalance();
+  });
 }
 async function loadOrders() {
   const today = ts().slice(0,5).replace('/', '-');
@@ -217,14 +220,16 @@ async function saveUser(id) {
   await setDoc(doc(db, 'users', id), USERS[id]);
 }
 
-async function loadMenu() {
-  const snap = await getDoc(doc(db, 'menu', 'week'));
-  if (snap.exists()) {
-    const data = snap.data();
-    DAYS.forEach((d, i) => {
-      if (data[i]) menu[i] = data[i];
-    });
-  }
+function listenMenu() {
+  onSnapshot(doc(db, 'menu', 'week'), snap => {
+    if (snap.exists()) {
+      const data = snap.data();
+      DAYS.forEach((d, i) => {
+        if (data[i]) menu[i] = data[i];
+      });
+      if (me) { resetPick(); drawMeals(); }
+    }
+  });
 }
 
 async function saveMenu() {
@@ -309,8 +314,8 @@ async function saveOrderByKey(key, list) {
 
 async function startup() {
   await initUsersToFirebase();
-  await loadUsers();
-  await loadMenu();
+  listenUsers();
+  listenMenu();
   const settings = await loadSettings();
   window.openDays = settings.days || 1;
   window.cutTime = settings.cutTime || '08:30';
@@ -369,6 +374,8 @@ window.switchOrderDay = switchOrderDay;
 window.getOrderSnap = getOrderSnap;
 window.saveOrderByKey = saveOrderByKey;
 window.cancelOrder = cancelOrder;
+window.listenUsers = listenUsers;
+window.listenMenu = listenMenu;
 </script>
 <!-- 訂單 -->
  <div class="pg" id="pgOrders">
@@ -441,7 +448,10 @@ window.cancelOrder = cancelOrder;
   <div id="cutEl"></div>
   <div class="dtabs" id="dayOrderTabs">
 </div>
-<button class="btn" style="margin-bottom:10px;width:100%;" onclick="selectAll()">全選</button>
+<div style="display:flex;gap:8px;margin-bottom:10px;">
+  <button class="btn" style="flex:1;" onclick="selectAll()">全選</button>
+  <button class="btn" style="flex:1;" onclick="randomPick()">隨機</button>
+</div>
 <div class="tabs">
   <div class="tab on" onclick="switchTab('bento')">便當</div>
   <div class="tab" onclick="switchTab('western')">西式</div>
@@ -635,6 +645,19 @@ function selectAll() {
     calcSub(m.id);
   });
   calcTotal();
+}
+function randomPick() {
+  const t = today();
+  const all = [...t.bento, ...t.western];
+  if (!all.length) { toast('今日沒有菜單'); return; }
+  const m = all[Math.floor(Math.random() * all.length)];
+  if (!pick[m.id]) pick[m.id] = [];
+  pick[m.id] = [{ set:false, drink:DRINK[0].name }];
+  document.getElementById(`q-${m.id}`).textContent = 1;
+  if (m.isWestern) renderItems(m.id);
+  calcSub(m.id);
+  calcTotal();
+  toast(`隨機選了「${m.name}」`);
 }
 async function setCutTime(val) {
   window.cutTime = val;
