@@ -312,6 +312,25 @@ async function startup() {
   const settings = await loadSettings();
   window.openDays = settings.days || 1;
   window.cutTime = settings.cutTime || '08:30';
+  const savedUser = localStorage.getItem('me');
+if (savedUser && USERS[savedUser]) {
+  me = savedUser;
+  document.getElementById('face').textContent = USERS[savedUser].isAdmin ? '管理' : savedUser.slice(-2);
+  document.getElementById('face').style.background = USERS[savedUser].isAdmin ? '#FCEBEB' : '#EAF3DE';
+  document.getElementById('face').style.color = USERS[savedUser].isAdmin ? '#A32D2D' : '#3B6D11';
+  document.getElementById('btnAdmin').classList.toggle('hide', !USERS[savedUser].isAdmin);
+  document.getElementById('btnMenu').classList.toggle('hide', !USERS[savedUser].isAdmin);
+  document.getElementById('btnOrders').classList.toggle('hide', !USERS[savedUser].isAdmin);
+  document.querySelector('.container').style.display = 'flex';
+  drawBalance();
+  const n = new Date(), wd = ['日','一','二','三','四','五','六'];
+  document.getElementById('dateEl').textContent = `星期${wd[n.getDay()]}・${n.getMonth()+1} 月 ${n.getDate()} 日`;
+  drawCut();
+  resetPick();
+  drawMeals();
+  drawDayOrderTabs();
+  go('pgOrder');
+}
 }
 startup();
 window.setCutTime = setCutTime;
@@ -687,6 +706,7 @@ function doLogin() {
   if (!USERS[user]) { err.textContent='找不到此帳號'; err.style.display='block'; return; }
   if (USERS[user].pin !== pin) { err.textContent='密碼錯誤，請再試一次'; err.style.display='block'; document.getElementById('iPin').value=''; return; }
   me = user;
+  localStorage.setItem('me', user);
   document.getElementById('face').textContent = user.slice(-2);
   document.getElementById('face').style.background = USERS[user].isAdmin ? '#FCEBEB' : '#EAF3DE';
   document.getElementById('face').style.color = USERS[user].isAdmin ? '#A32D2D' : '#3B6D11';
@@ -707,6 +727,7 @@ function doLogin() {
 }
 function clearErr() { const e=document.getElementById('errmsg'); e.style.display='none'; e.textContent=''; }
 function doLogout() {
+  localStorage.removeItem('me');
   me = null;
   document.getElementById('iUser').value = '';
   document.getElementById('iPin').value = '';
@@ -716,7 +737,10 @@ function doLogout() {
 }
 function drawBalance() { document.getElementById('moneyEl').textContent = `餘額 $${USERS[me].balance}`; }
 
-function drawCut() {
+async function drawCut() {
+  const settings = await window.loadSettings();
+  window.cutTime = settings.cutTime || '08:30';
+  window.openDays = settings.days || 1;
   const el = document.getElementById('cutEl');
   const sb = document.getElementById('btnSend');
   if (closed()) {
@@ -1014,7 +1038,7 @@ async function saveEdit() {
   closePop(); drawDay(); toast(`已更新「${name}」`);
 }
 
-setInterval(() => { if(me) drawCut(); }, 30000);
+setInterval(() => { if(me) drawCut(); }, 10000);
 
 //donate
 let donateAmt = 0;
