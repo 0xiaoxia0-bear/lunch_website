@@ -810,8 +810,10 @@ function togItemDrink(id, i, val) {
   calcSub(id); calcTotal();
 }
 function today() {
-  const i = (new Date().getDay()+6)%7;
-  return menu[Math.min(i+orderDay, 4)];
+  const d = new Date().getDay(); // 0=日, 1=一, 2=二... 6=六
+  let i = (d + 6) % 7;
+  if (i >= 5) i = 0; // 週六(5)或週日(6)就顯示週一
+  return menu[i];
 }
 function resetPick() {
   pick = {};
