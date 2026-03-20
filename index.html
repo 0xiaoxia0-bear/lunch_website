@@ -206,12 +206,7 @@ const fbConfig = {
 };
 const app = initializeApp(fbConfig);
 const db  = getFirestore(app);
-function listenUsers() {
-  onSnapshot(collection(db, 'users'), snap => {
-    snap.forEach(d => { USERS[d.id] = d.data(); });
-    if (me) drawBalance();
-  });
-}
+
 async function loadOrders() {
   const today = ts().slice(0,5).replace('/', '-');
   const snap = await getDoc(doc(db, 'orders', today));
@@ -222,21 +217,27 @@ async function saveUser(id) {
 }
 
 function listenMenu() {
-  onSnapshot(doc(db, 'menu', 'week'), snap => {
+  onSnapshot(doc(db, 'menu', 'current'), snap => {
     if (snap.exists()) {
       const data = snap.data();
-      DAYS.forEach((d, i) => {
-        if (data[i]) menu[i] = data[i];
-      });
+      DAYS.forEach((d, i) => { if (data[i]) menu[i] = data[i]; });
+      if (me) { resetPick(); drawMeals(); }
+    }
+  });
+  onSnapshot(doc(db, 'menu', 'next'), snap => {
+    if (snap.exists()) {
+      const data = snap.data();
+      DAYS.forEach((d, i) => { if (data[i]) nextMenu[i] = data[i]; });
       if (me) { resetPick(); drawMeals(); }
     }
   });
 }
 
-async function saveMenu() {
+async function saveMenu(isNext) {
+  const key = isNext ? 'next' : 'current';
   const obj = {};
-  DAYS.forEach((d, i) => { obj[i] = menu[i]; });
-  await setDoc(doc(db, 'menu', 'week'), obj);
+  DAYS.forEach((d, i) => { obj[i] = (isNext ? nextMenu : menu)[i]; });
+  await setDoc(doc(db, 'menu', key), obj);
 }
 
 async function initUsersToFirebase() {
@@ -338,7 +339,15 @@ if (savedUser && USERS[savedUser]) {
   drawMeals();
   drawDayOrderTabs();
   go('pgOrder');
+  }
 }
+let unsubUsers = null;
+
+function listenUsers() {
+  unsubUsers = onSnapshot(collection(db, 'users'), snap => {
+    snap.forEach(d => { USERS[d.id] = d.data(); });
+    if (me) drawBalance();
+  });
 }
 startup();
 window.setCutTime = setCutTime;
@@ -377,6 +386,9 @@ window.saveOrderByKey = saveOrderByKey;
 window.cancelOrder = cancelOrder;
 window.listenUsers = listenUsers;
 window.listenMenu = listenMenu;
+window.setEditWeek = setEditWeek;
+window.stopListenUsers = () => { if(unsubUsers) unsubUsers(); };
+window.startListenUsers = listenUsers;
 </script>
 <!-- 訂單 -->
  <div class="pg" id="pgOrders">
@@ -486,6 +498,13 @@ window.listenMenu = listenMenu;
     </div>
   </div>
   <div class="amtrow" style="margin-bottom:16px;">
+  <div class="amtrow" style="margin-bottom:16px;">
+  <span style="font-size:13px;color:#888;">編輯哪週菜單</span>
+  <div style="display:flex;gap:6px;">
+    <button class="tbtn on" id="weekCurrent" onclick="setEditWeek('current')">本週</button>
+    <button class="tbtn" id="weekNext" onclick="setEditWeek('next')">下週</button>
+  </div>
+</div>
   <span style="font-size:13px;color:#888;">本週開放天數</span>
   <select class="dsel" id="openDaysSel" onchange="setOpenDays(this.value)">
     <option value="1">1 天</option>
@@ -688,6 +707,7 @@ function switchOrderDay(i) {
 const DAYS  = ['一','二','三','四','五'];
 const DRINK = [{ name:"紅茶", add:15  },{ name:"綠茶", add:15  },{ name:"奶茶", add:25 },];
 const menu = DAYS.map(() => ({ bento: [], western: [] }));
+const nextMenu = DAYS.map(() => ({ bento: [], western: [] }));
 
 let me = null, pick = {}, day = 0, type = 'bento', edit = null;
 
@@ -810,10 +830,10 @@ function togItemDrink(id, i, val) {
   calcSub(id); calcTotal();
 }
 function today() {
-  const d = new Date().getDay(); // 0=日, 1=一, 2=二... 6=六
-  let i = (d + 6) % 7;
-  if (i >= 5) i = 0; // 週六(5)或週日(6)就顯示週一
-  return menu[i];
+  const d = new Date().getDay();
+  const i = (d + 6) % 7;
+  if (d === 0 || d === 6) return nextMenu[0]; // 週日或週六顯示下週一
+  return menu[Math.min(i, 4)];
 }
 function resetPick() {
   pick = {};
@@ -916,11 +936,16 @@ async function submitOrder() {
       sum += m.price + drinkAdd;
     });
   });
-  USERS[me].balance -= sum;
-  USERS[me].log.push({ desc:`點餐 ${lines.join('、')}`, amt:-sum, time:ts() });
+  const newBalance = USERS[me].balance - sum;
+  const newLog = [...(USERS[me].log || []), { desc:`點餐 ${lines.join('、')}`, amt:-sum, time:ts() }];
+  console.log('newBalance', newBalance);
+  window.stopListenUsers();
+  USERS[me] = { ...USERS[me], balance: newBalance, log: newLog };
   USERS['admin'].log.push({ desc:`${me} 點餐 ${lines.join('、')}`, amt:-sum, time:ts() });
-  await saveUser('admin');
-  await saveUser(me);
+  await window.saveUser('admin');
+  await window.saveUser(me);
+  window.startListenUsers();
+  console.log('about to save', JSON.stringify(USERS[me]));
   await saveOrder({
   user: me,
   items: pick,
@@ -931,6 +956,9 @@ async function submitOrder() {
   toast(`訂單送出！扣款 $${sum}`);
   drawBalance();
   resetPick(); drawMeals(); calcTotal();
+  console.log('sum', sum, 'balance before', USERS[me].balance);
+  console.log('balance after save', USERS[me].balance);
+  console.log('newBalance', newBalance);
 }
 
 function drawUsers() {
@@ -974,10 +1002,12 @@ async function adjBal(n, dir) {
   const inp = document.getElementById(`a-${n}`);
   const amt = parseInt(inp.value);
   if (!amt||amt<=0) { toast('請輸入有效金額'); return; }
-  USERS[n].balance += dir*amt;
-  if (USERS[n].balance<0) USERS[n].balance=0;
-  USERS[n].log.push({ desc:dir>0?'儲值':'扣款', amt:dir*amt, time:ts() });
-  await saveUser(n);
+  window.stopListenUsers();
+  const newBalance = USERS[n].balance + dir*amt;
+  const newLog = [...(USERS[n].log||[]), { desc:dir>0?'儲值':'扣款', amt:dir*amt, time:ts() }];
+  USERS[n] = { ...USERS[n], balance: newBalance < 0 ? 0 : newBalance, log: newLog };
+  await window.saveUser(n)
+  window.startListenUsers();
   document.getElementById(`b-${n}`).textContent = `$${USERS[n].balance}`;
   document.getElementById(`lg-${n}`).innerHTML = drawLog(n);
   inp.value = '';
@@ -1003,7 +1033,8 @@ function switchDay(i) {
   drawDay();
 }
 function drawDay() {
-  const m = menu[day]; let h='';
+  const m = (editWeek === 'next' ? nextMenu : menu)[day];
+  let h = '';
   h += `<div class="slbl">便當（${m.bento.length} 項）</div>`;
   h += m.bento.length ? m.bento.map(x=>mrow(x,'bento')).join('') : `<div class="nil">尚無便當</div>`;
   h += `<div class="sep">西式（${m.western.length} 項）</div>`;
@@ -1030,18 +1061,18 @@ async function addMeal() {
   if (!name||!price||price<=0) { toast('請填寫名稱與價格'); return; }
   const item = { id:uid(), name, price };
   if (type==='western') { const sp=parseInt(document.getElementById('nSet').value); if(sp>0)item.set=sp; item.isWestern=true; }
-  menu[day][type].push(item);
+  (editWeek === 'next' ? nextMenu : menu)[day][type].push(item);
   pick[item.id] = { qty:0, set:false, drink:DRINK[0] };
   document.getElementById('nName').value = '';
   document.getElementById('nPrice').value = '';
   document.getElementById('nSet').value = '';
-  await saveMenu();
+  await saveMenu(editWeek === 'next');
   drawDay();
   toast(`已新增「${name}」`);
 }
 async function delMeal(id, t) {
-  const arr=menu[day][t], i=arr.findIndex(m=>m.id===id);
-  if (i>=0) { const n=arr[i].name; arr.splice(i,1); await saveMenu(); drawDay(); toast(`已刪除「${n}」`); }
+  const arr=(editWeek === 'next' ? nextMenu : menu)[day][t], i=arr.findIndex(m=>m.id===id);
+  if (i>=0) { const n=arr[i].name; arr.splice(i,1); await saveMenu(editWeek === 'next'); drawDay(); toast(`已刪除「${n}」`); }
 }
 function openEdit(id, t) {
   const m = menu[day][t].find(x=>x.id===id); if(!m)return;
@@ -1056,13 +1087,13 @@ function closePop() { document.getElementById('editPop').classList.add('hide'); 
 async function saveEdit() {
   if (!edit) return;
   const {id, t} = edit;
-  const m = menu[day][t].find(x=>x.id===id);
+  const m = (editWeek === 'next' ? nextMenu : menu)[day][t].find(x=>x.id===id);
   const name  = document.getElementById('eName').value.trim();
   const price = parseInt(document.getElementById('ePrice').value);
   if (!name||!price||price<=0) { toast('請填寫名稱與價格'); return; }
   m.name=name; m.price=price;
   if (t==='western') { const sp=parseInt(document.getElementById('eSet').value); m.set=sp>0?sp:undefined; }
-  await saveMenu();
+  await saveMenu(editWeek === 'next');
   closePop(); drawDay(); toast(`已更新「${name}」`);
 }
 
@@ -1083,12 +1114,22 @@ async function doDonate() {
   if (!donateAmt) { err.textContent='請選擇金額'; err.style.display='block'; return; }
   if (pin !== USERS[me].pin) { err.textContent='密碼錯誤'; err.style.display='block'; document.getElementById('dPin').value=''; return; }
   if (USERS[me].balance < donateAmt) { err.textContent='餘額不足'; err.style.display='block'; return; }
-  USERS[me].balance -= donateAmt;
-  USERS['10331'].balance += donateAmt;
-  USERS['10331'].log.push({ desc:`收到 ${me} 斗內`, amt:donateAmt, time:ts() });
+  
+  window.stopListenUsers();
+  
+  const myNewBalance = USERS[me].balance - donateAmt;
+  const myNewLog = [...(USERS[me].log||[]), { desc:`斗內`, amt:-donateAmt, time:ts() }];
+  USERS[me] = { ...USERS[me], balance: myNewBalance, log: myNewLog };
+  
+  const targetNewBalance = USERS['10331'].balance + donateAmt;
+  const targetNewLog = [...(USERS['10331'].log||[]), { desc:`收到 ${me} 斗內`, amt:donateAmt, time:ts() }];
+  USERS['10331'] = { ...USERS['10331'], balance: targetNewBalance, log: targetNewLog };
+  
+  await window.saveUser(me);
   await window.saveUser('10331');
-  await saveUser('admin');
-  await saveUser(me);
+  
+  window.startListenUsers();
+  
   drawBalance();
   toast(`成功斗內 $${donateAmt}！`);
   const coin = document.createElement('div');
@@ -1127,6 +1168,14 @@ function toggleDark() {
 if (localStorage.getItem('dark') === 'true') {
   document.body.classList.add('dark');
   document.getElementById('darkBtn').textContent = '☀️';
+}
+
+let editWeek = 'current';
+function setEditWeek(w) {
+  editWeek = w;
+  document.getElementById('weekCurrent').classList.toggle('on', w==='current');
+  document.getElementById('weekNext').classList.toggle('on', w==='next');
+  drawDay();
 }
 </script>
 </body>
