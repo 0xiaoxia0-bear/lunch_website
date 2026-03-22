@@ -194,7 +194,7 @@ body.dark .addtitle { color: #e0e0e0; }
 window.saveUser = saveUser;
 window.saveMenu = saveMenu;
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-app.js";
-import { getFirestore, doc, getDoc, setDoc, collection, getDocs, onSnapshot } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-firestore.js";
+import { getFirestore, doc, getDoc, setDoc, collection, getDocs, onSnapshot, arrayUnion, arrayRemove } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-firestore.js";
 
 const fbConfig = {
   apiKey: "AIzaSyA3MfTkuXeovGICNaq_bH-9AVF1w6iYRB0",
@@ -290,13 +290,12 @@ async function drawOrders() {
   }
   document.getElementById('orderSummary').innerHTML = html;
 }
-async function saveOrder(orderData) {
-  const today = ts().slice(0,5).replace('/', '-');
-  const ref = doc(db, 'orders', today);
-  const snap = await getDoc(ref);
-  const existing = snap.exists() ? snap.data().list : [];
-  existing.push(orderData);
-  await setDoc(ref, { list: existing });
+async function saveOrder(orderData, dayOffset) {
+  const d = new Date();
+  d.setDate(d.getDate() + (dayOffset||0));
+  const key = `${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  const ref = doc(db, 'orders', key);
+  await setDoc(ref, { list: arrayUnion(orderData) }, { merge: true });
 }
 async function loadSettings() {
   const snap = await getDoc(doc(db, 'settings', 'main'));
@@ -341,6 +340,14 @@ if (savedUser && USERS[savedUser]) {
   go('pgOrder');
   }
 }
+function getOrderRef(key) {
+  return doc(db, 'orders', key);
+}
+
+async function removeOrder(ref, orderData) {
+  await setDoc(ref, { list: arrayRemove(orderData) }, { merge: true });
+}
+
 let unsubUsers = null;
 
 function listenUsers() {
@@ -389,6 +396,8 @@ window.listenMenu = listenMenu;
 window.setEditWeek = setEditWeek;
 window.stopListenUsers = () => { if(unsubUsers) unsubUsers(); };
 window.startListenUsers = listenUsers;
+window.getOrderRef = getOrderRef;
+window.removeOrder = removeOrder;
 </script>
 <!-- 訂單 -->
  <div class="pg" id="pgOrders">
@@ -599,11 +608,17 @@ const USERS = {
 async function cancelOrder(key, idx, total) {
   const data = await window.getOrderSnap(key);
   if (!data) return;
-  data.list.splice(idx, 1);
-  await window.saveOrderByKey(key, data.list);
-  USERS[me].balance += total;
-  USERS[me].log.push({ desc:'取消訂單', amt:total, time:ts() });
+  const orderToRemove = data.list[idx];
+  const ref = window.getOrderRef(key);
+  await window.removeOrder(ref, orderToRemove);
+  
+  window.stopListenUsers();
+  const newBalance = USERS[me].balance + total;
+  const newLog = [...(USERS[me].log||[]), { desc:'取消訂單', amt:total, time:ts() }];
+  USERS[me] = { ...USERS[me], balance: newBalance, log: newLog };
   await window.saveUser(me);
+  window.startListenUsers();
+  
   drawBalance();
   toast('訂單已取消，退款 $' + total);
   drawMyOrders();
