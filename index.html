@@ -435,6 +435,7 @@ window.removeOrder = removeOrder;
       </div>
       <h1 class="light">午餐訂餐</h1>
       <p>請登入後開始點餐</p>
+      <img src="./image/螢幕擷取畫面 2026-03-26 231602.png" style="width:60%;border-radius:8px;margin-top:10px;">
     </div>
     <div class="field">
       <label>帳號</label>
@@ -934,6 +935,9 @@ function calcTotal() {
   if (!closed()) document.getElementById('btnSend').disabled = cnt===0;
 }
 async function submitOrder() {
+  const btn = document.getElementById('btnSend');
+  btn.disabled = true;
+  btn.textContent = '送出中...';
   const t = today(), all = [...t.bento,...t.western];
   const lines = all.filter(m=>pick[m.id]&&pick[m.id].length>0).map(m => {
   const p = pick[m.id];
@@ -971,6 +975,7 @@ async function submitOrder() {
   toast(`訂單送出！扣款 $${sum}`);
   drawBalance();
   resetPick(); drawMeals(); calcTotal();
+  btn.textContent = '送出訂單';
   console.log('sum', sum, 'balance before', USERS[me].balance);
   console.log('balance after save', USERS[me].balance);
   console.log('newBalance', newBalance);
