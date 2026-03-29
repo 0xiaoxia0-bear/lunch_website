@@ -502,6 +502,9 @@ window.removeOrder = removeOrder;
 </div>
   <div class="date" id="dateEl"></div>
   <div id="cutEl"></div>
+  <div id="multiDayAlert" class="hide" style="font-size:13px;color:#A32D2D;background:#FCEBEB;border-radius:8px;padding:7px 12px;margin-bottom:12px;">
+  ⚠️ 段考期間！請一次點好 <span id="openDaysNum"></span> 天的餐點
+  </div>
   <div class="dtabs" id="dayOrderTabs">
 </div>
 <div style="display:flex;gap:8px;margin-bottom:10px;">
@@ -556,6 +559,9 @@ window.removeOrder = removeOrder;
     <option value="4">4 天</option>
     <option value="5">5 天</option>
   </select>
+  <div id="multiDayNotice" class="hide" style="font-size:13px;color:#A32D2D;background:#FCEBEB;border-radius:8px;padding:7px 12px;margin-bottom:12px;">
+  ⚠️ 目前開放多天點餐，記得填好每天的菜單！
+</div>
 </div>
 <div class="amtrow" style="margin-bottom:16px;">
   <span style="font-size:13px;color:#888;">點餐截止時間</span>
@@ -802,6 +808,8 @@ function doLogin() {
   if (USERS[user].pin !== pin) { err.textContent='密碼錯誤，請再試一次'; err.style.display='block'; document.getElementById('iPin').value=''; return; }
   me = user;
   localStorage.setItem('me', user);
+  document.getElementById('multiDayAlert').classList.toggle('hide', window.openDays <= 1);
+  document.getElementById('openDaysNum').textContent = window.openDays;
   document.getElementById('face').textContent = user.slice(-2);
   document.getElementById('face').style.background = USERS[user].isAdmin ? '#FCEBEB' : '#EAF3DE';
   document.getElementById('face').style.color = USERS[user].isAdmin ? '#A32D2D' : '#3B6D11';
@@ -1080,6 +1088,7 @@ function drawMenuPage() {
     `<div class="dtab${i===day?' on':''}" onclick="switchDay(${i})">週${d}</div>`
   ).join('');
   drawDay();
+  document.getElementById('multiDayNotice').classList.toggle('hide', window.openDays <= 1);
 }
 function switchDay(i) {
   day = i;
