@@ -220,6 +220,7 @@ function listenMenu() {
   onSnapshot(doc(db, 'menu', 'current'), snap => {
     if (snap.exists()) {
       const data = snap.data();
+      console.log('menu loaded', data);
       DAYS.forEach((d, i) => { if (data[i]) menu[i] = data[i]; });
       if (me) { resetPick(); drawMeals(); }
     }
@@ -326,10 +327,24 @@ async function saveOrderByKey(key, list) {
 async function startup() {
 const today = new Date().getDay();
 if (today === 1) {
-  const nextSnap = await getDoc(doc(db, 'menu', 'next'));
-  if (nextSnap.exists()) {
-    await setDoc(doc(db, 'menu', 'current'), nextSnap.data());
-    await setDoc(doc(db, 'menu', 'next'), {});
+  const settingsSnap = await getDoc(doc(db, 'settings', 'main'));
+  const settings = settingsSnap.exists() ? settingsSnap.data() : {};
+  const lastSwitch = settings.lastSwitch || '';
+  const todayStr = ts().slice(0,5);
+  
+  if (lastSwitch !== todayStr) {
+    const nextSnap = await getDoc(doc(db, 'menu', 'next'));
+    if (nextSnap.exists()) {
+      const nextData = nextSnap.data();
+      const hasData = Object.values(nextData).some(day => 
+        (day.bento && day.bento.length > 0) || (day.western && day.western.length > 0)
+      );
+      if (hasData) {
+        await setDoc(doc(db, 'menu', 'current'), nextData);
+        await setDoc(doc(db, 'menu', 'next'), {});
+        await setDoc(doc(db, 'settings', 'main'), { ...settings, lastSwitch: todayStr }, { merge: true });
+      }
+    }
   }
 }
   await initUsersToFirebase();
@@ -865,8 +880,8 @@ function togItemDrink(id, i, val) {
 }
 function today() {
   const d = new Date().getDay();
-  const i = (d + 6) % 7;
-  if (d === 0 || d === 6) return nextMenu[0]; // 週日或週六顯示下週一
+  if (d === 0 || d === 6) return nextMenu[orderDay] || nextMenu[0];
+  const i = (d + 6 + orderDay) % 7;
   return menu[Math.min(i, 4)];
 }
 function resetPick() {
@@ -899,6 +914,7 @@ function chgSet(id, d) {
 }
 function drawMeals() {
   const t = today();
+  console.log('today menu', t, 'orderDay', orderDay);
   document.getElementById('bento-list').innerHTML   = t.bento.length   ? t.bento.map(m=>mcard(m)).join('')   : '<div class="noitem">今日無便當菜單</div>';
   document.getElementById('western-list').innerHTML = t.western.length ? t.western.map(m=>mcard(m)).join('') : '<div class="noitem">今日無西式菜單</div>';
   if (closed()) document.querySelectorAll('.qbtn').forEach(b => b.disabled = true);
