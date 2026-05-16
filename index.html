@@ -847,9 +847,6 @@ function doLogout() {
 function drawBalance() { document.getElementById('moneyEl').textContent = `餘額 $${USERS[me].balance}`; }
 
 async function drawCut() {
-  const settings = await window.loadSettings();
-  window.cutTime = settings.cutTime || '08:30';
-  window.openDays = settings.days || 1;
   const el = document.getElementById('cutEl');
   const sb = document.getElementById('btnSend');
   if (closed()) {
