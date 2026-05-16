@@ -255,19 +255,21 @@ async function drawOrders() {
   let total = 0;
   list.forEach(order => {
     total += order.total;
-    const t = today(), all = [...t.bento,...t.western];
-    Object.entries(order.items).forEach(([id, items]) => {
-      const m = all.find(x=>x.id===id);
-      if (!m || !items.length) return;
-      if (!mealSummary[m.name]) mealSummary[m.name] = 0;
-      mealSummary[m.name] += items.length;
-      items.forEach(item => {
-        if (item.set) {
-          if (!drinkSummary[item.drink]) drinkSummary[item.drink] = 0;
-          drinkSummary[item.drink]++;
-        }
-      });
+    order.detail.forEach(line => {
+      const name = line.split(' ×')[0];
+      if (!mealSummary[name]) mealSummary[name] = 0;
+      mealSummary[name]++;
     });
+    if (order.items) {
+      Object.values(order.items).forEach(items => {
+        items.forEach(item => {
+          if (item.set && item.drink) {
+            if (!drinkSummary[item.drink]) drinkSummary[item.drink] = 0;
+            drinkSummary[item.drink]++;
+          }
+        });
+      });
+    }
   });
   let html = '';
   if (!list.length) {
@@ -372,6 +374,10 @@ if (savedUser && USERS[savedUser]) {
   drawDayOrderTabs();
   go('pgOrder');
   }
+  window.addEventListener('online', () => {
+  listenUsers();
+  listenMenu();
+  });
 }
 function getOrderRef(key) {
   return doc(db, 'orders', key);
