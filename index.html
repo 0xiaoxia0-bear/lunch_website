@@ -612,6 +612,49 @@ window.removeOrder = removeOrder;
 <div class="toast" id="toast"></div>
 
 <script>
+  const USERS = {
+"20701": { pin:"0037", balance:0, isAdmin:false, log:[] },
+"20702": { pin:"0613", balance:0, isAdmin:false, log:[] },
+"20703": { pin:"0148", balance:0, isAdmin:false, log:[] },
+"20704": { pin:"0540", balance:0, isAdmin:false, log:[] },
+"20705": { pin:"0114", balance:0, isAdmin:false, log:[] },
+"20706": { pin:"0011", balance:0, isAdmin:false, log:[] },
+"20707": { pin:"0403", balance:0, isAdmin:false, log:[] },
+"20708": { pin:"0545", balance:0, isAdmin:false, log:[] },
+"20709": { pin:"0619", balance:0, isAdmin:false, log:[] },
+"20710": { pin:"0405", balance:0, isAdmin:false, log:[] },
+"20711": { pin:"0056", balance:0, isAdmin:false, log:[] },
+"20712": { pin:"0090", balance:0, isAdmin:false, log:[] },
+"20713": { pin:"0057", balance:0, isAdmin:false, log:[] },
+"20714": { pin:"0630", balance:0, isAdmin:false, log:[] },
+"20715": { pin:"0195", balance:0, isAdmin:false, log:[] },
+"20716": { pin:"0377", balance:0, isAdmin:false, log:[] },
+"20717": { pin:"0092", balance:0, isAdmin:false, log:[] },
+"20718": { pin:"0093", balance:0, isAdmin:false, log:[] },
+"20719": { pin:"0447", balance:0, isAdmin:false, log:[] },
+"20720": { pin:"0487", balance:0, isAdmin:false, log:[] },
+"20721": { pin:"0413", balance:0, isAdmin:false, log:[] },
+"20722": { pin:"0269", balance:0, isAdmin:false, log:[] },
+"20723": { pin:"0417", balance:0, isAdmin:false, log:[] },
+"20724": { pin:"0061", balance:0, isAdmin:false, log:[] },
+"20725": { pin:"0062", balance:0, isAdmin:false, log:[] },
+"20726": { pin:"0241", balance:0, isAdmin:false, log:[] },
+"20727": { pin:"0136", balance:0, isAdmin:false, log:[] },
+"20728": { pin:"0100", balance:0, isAdmin:false, log:[] },
+"20729": { pin:"0348", balance:0, isAdmin:false, log:[] },
+"20730": { pin:"0101", balance:0, isAdmin:false, log:[] },
+"20731": { pin:"0604", balance:0, isAdmin:false, log:[] },
+"20732": { pin:"0533", balance:0, isAdmin:false, log:[] },
+"20733": { pin:"0104", balance:0, isAdmin:false, log:[] },
+"20734": { pin:"0459", balance:0, isAdmin:false, log:[] },
+"20735": { pin:"0352", balance:0, isAdmin:false, log:[] },
+"20736": { pin:"0280", balance:0, isAdmin:false, log:[] },
+"20737": { pin:"0070", balance:0, isAdmin:false, log:[] },
+"20738": { pin:"0461", balance:0, isAdmin:false, log:[] },
+  "1": { pin:"1111", balance:1000000, isAdmin:false, log:[] },
+  "admin": { pin:"0000", balance:0, isAdmin:true,  log:[] },
+};
+
 async function cancelOrder(key, idx, total) {
   const data = await window.getOrderSnap(key);
   if (!data) return;
