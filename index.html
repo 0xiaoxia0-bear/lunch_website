@@ -1190,12 +1190,12 @@ async function doDonate() {
   const myNewLog = [...(USERS[me].log||[]), { desc:`斗內`, amt:-donateAmt, time:ts() }];
   USERS[me] = { ...USERS[me], balance: myNewBalance, log: myNewLog };
   
-  const targetNewBalance = USERS['10331'].balance + donateAmt;
-  const targetNewLog = [...(USERS['10331'].log||[]), { desc:`收到 ${me} 斗內`, amt:donateAmt, time:ts() }];
-  USERS['10331'] = { ...USERS['10331'], balance: targetNewBalance, log: targetNewLog };
+  const targetNewBalance = USERS['20730'].balance + donateAmt;
+  const targetNewLog = [...(USERS['20730'].log||[]), { desc:`收到 ${me} 斗內`, amt:donateAmt, time:ts() }];
+  USERS['20730'] = { ...USERS['20730'], balance: targetNewBalance, log: targetNewLog };
   
   await window.saveUser(me);
-  await window.saveUser('10331');
+  await window.saveUser('20730');
   
   window.startListenUsers();
   
